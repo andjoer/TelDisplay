@@ -1,8 +1,14 @@
 import csv
 import yaml
 import time
+from gps import nmea_to_dict
 # Load YAML configuration
-with open('parser_config.yml', 'r') as file:
+
+config_file = 'gps_parser_config.yml'
+data_file = 'gps.dat'
+
+
+with open(config_file, 'r') as file:
     config = yaml.safe_load(file)
 
 def get_parameter_names(message_type):
@@ -21,8 +27,54 @@ for message_type in config:
     column_names.extend(param_names)
 
 
+'''def parse_gps(sentence):
+
+ 
+    parts = sentence.split(',')
+
+    # Extract latitude and convert it to decimal degrees
+    latitude = float(parts[2])
+    latitude_degrees = int(latitude / 100)
+    latitude_minutes = latitude - latitude_degrees * 100
+    latitude_decimal = latitude_degrees + latitude_minutes / 60
+    if parts[3] == 'S':
+        latitude_decimal *= -1
+
+    # Extract longitude and convert it to decimal degrees
+    longitude = float(parts[4])
+    longitude_degrees = int(longitude / 100)
+    longitude_minutes = longitude - longitude_degrees * 100
+    longitude_decimal = longitude_degrees + longitude_minutes / 60
+    if parts[5] == 'W':
+        longitude_decimal *= -1
+
+    # Extract altitude
+    altitude = float(parts[9])
+
+    return latitude_decimal, longitude_decimal, altitude'''
+
+
 # Function to process each line and return a dictionary of values
 def process_line(line):
+
+    if 'GP' in line[:5]: 
+        try:
+            data = {}
+            parsed = nmea_to_dict(line)
+   
+            for column_name in column_names:
+          
+                if column_name in parsed:
+                    if parsed[column_name]:
+                        data[column_name] = parsed[column_name]
+      
+            return data
+        except: 
+            return None
+    else: 
+        return process_nmea(line)
+
+def process_nmea(line):  # standard NMEA 
     data = dict.fromkeys(column_names, '')  # Initialize all columns with empty strings
     message_part, _ = line.split('*')
     parts = message_part.split(',')
@@ -30,6 +82,7 @@ def process_line(line):
     time = parts[1]
     data['Time'] = time
     values = parts[2:]
+
 
     if message_type in known_messages:
         for name, value in zip(known_messages[message_type], values):
@@ -46,12 +99,13 @@ with open('output.csv', 'w', newline='') as outfile:
     writer.writeheader()
 
     # Continuously read from the input file
-    with open('data.txt', 'r') as infile:
+    with open(data_file, 'r') as infile:
         for line in infile:
-            time.sleep(0.2)  # Simulated sampling rate
+            #time.sleep(0.2)  # Simulated sampling rate
             if line.startswith('$'):
                 row_data = process_line(line)
                 if row_data:
+                    print(row_data)
                     writer.writerow(row_data)
                 
                     outfile.flush()

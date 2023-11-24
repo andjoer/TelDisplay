@@ -1,0 +1,11 @@
+GPS:
+  - axis1:
+      unit:
+        - '°'
+        - '°'
+        - 'm'
+      dim: '3D'
+      parameters:
+      - lon
+      - lat
+      - altitude

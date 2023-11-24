@@ -1,0 +1,6 @@
+GPGGA:
+  name: GPS
+  parameters:
+    - lon
+    - lat
+    - altitude
