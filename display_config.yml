@@ -1,0 +1,19 @@
+Inertial:
+  - axis1:
+      unit: 'rad/s'
+      parameters:
+      - rot_x
+      - rot_y
+      - rot_z
+  - axis2:
+      unit: 'm/s²'
+      parameters:
+        - a_x
+        - a_y
+        - a_z
+
+Pressure:
+  - axis1:
+      unit: 'hpa'
+      parameters:
+        - hpa

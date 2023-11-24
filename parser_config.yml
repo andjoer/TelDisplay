@@ -1,0 +1,15 @@
+RQIMU0:
+  name: IMU
+  parameters:
+    - rot_x
+    - rot_y
+    - rot_z
+    - a_x
+    - a_y
+    - a_z
+
+RQMET0:
+  name: Pressure
+  parameters:
+    - hpa
+    - stat
