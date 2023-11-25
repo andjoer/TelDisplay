@@ -3,8 +3,8 @@ GPS:
   axis:
   - axis1:
       unit:
-        - '°'
-        - '°'
+        - 'm'
+        - 'm'
         - 'm'
       
       parameters:

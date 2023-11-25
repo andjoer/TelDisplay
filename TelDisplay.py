@@ -10,6 +10,8 @@ from PyQt5 import QtChart
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
+from TelConvert import converter
+
 class PrintWindow(QWidget):
     def __init__(self, axis_data, data_file,main_window):
         super().__init__()
@@ -75,6 +77,10 @@ class PrintWindow(QWidget):
                 self.df = df.copy()
                 df['Time'] = pd.to_numeric(df['Time'], errors='coerce')
                 df = df[df['Time'] > self.start_time]
+                for col in df.columns:
+                    if col in converter:
+                        df = converter[col](df)
+
                 if len(df) > 0:                             # if we want to save this if its possible due to the try
                     latest_data = df.iloc[-1]
                     # Calculate min and max with NaN values excluded
@@ -159,23 +165,29 @@ class PlotWindow(QWidget):
             label.setText(f"{data_column} ({unit}): {value} max: {max_value} min: {min_value}")
 
     def updatePlot(self,force=False):
-        #try:
+        try:
             df = pd.read_csv(self.data_file)
             if (len(df) > len(self.df) or len(self.df) == 0) or force:
                 self.df = df.copy()
                 df['Time'] = pd.to_numeric(df['Time'], errors='coerce')
                 df = df[df['Time'] > self.start_time]
-                if self.dim == '3D':
-                    self.updatePlot3D(df)
-                else:
-                    self.updatePlot2D(df)
-        #except Exception as e:
-            #print(f'Error updating plot: {e}')
+                if len(df > 0):                                          # could be avoided since its inside a try
+                    for col in df.columns:
+                        if col in converter:
+                            df = converter[col](df)
+          
+                    if self.dim == '3D':
+                        self.updatePlot3D(df)
+                    else:
+                        self.updatePlot2D(df)
+        except Exception as e:
+            print(f'Error updating plot: {e}')
 
     def updatePlot3D(self, df):
+        if not hasattr(self, 'ax') or self.ax is None:
+            self.ax = self.canvas.figure.add_subplot(111, projection='3d')
 
-        ax = self.canvas.figure.add_subplot(111, projection='3d')
-        ax.clear()
+        self.ax.clear()
 
         colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k']  # Define color list
         color_index = 0
@@ -189,23 +201,23 @@ class PlotWindow(QWidget):
                 if j + 2 < len(params):  # Check if there are at least 3 parameters
                     color = colors[color_index % len(colors)]
                     df_subset = df.dropna(subset=[params[j], params[j + 1], params[j + 2]])
-                    ax.plot(df_subset[params[j]], df_subset[params[j + 1]], df_subset[params[j + 2]], color=color, label=f"{'-'.join(params[j:j+3])}")
+                    self.ax.plot(df_subset[params[j]], df_subset[params[j + 1]], df_subset[params[j + 2]], color=color, label=f"{'-'.join(params[j:j+3])}")
                     color_index += 1
 
         # Setting labels for the first group of parameters
         if len(self.axis_data) > 0 and len(self.axis_data[0][0]) >= 3:
             first_group_params = self.axis_data[0][0]
             first_group_units = self.axis_data[0][1]
-            ax.set_xlabel(f"{first_group_params[0]} ({first_group_units[0]})")
-            ax.set_ylabel(f"{first_group_params[1]} ({first_group_units[1]})")
-            ax.set_zlabel(f"{first_group_params[2]} ({first_group_units[2]})")
+            self.ax.set_xlabel(f"{first_group_params[0]} ({first_group_units[0]})")
+            self.ax.set_ylabel(f"{first_group_params[1]} ({first_group_units[1]})")
+            self.ax.set_zlabel(f"{first_group_params[2]} ({first_group_units[2]})")
 
         # Adjusting the axis limits according to the value range
-        ax.set_xlim(df[first_group_params[0]].min(), df[first_group_params[0]].max())
-        ax.set_ylim(df[first_group_params[1]].min(), df[first_group_params[1]].max())
-        ax.set_zlim(df[first_group_params[2]].min(), df[first_group_params[2]].max())
+        self.ax.set_xlim(df[first_group_params[0]].min(), df[first_group_params[0]].max())
+        self.ax.set_ylim(df[first_group_params[1]].min(), df[first_group_params[1]].max())
+        self.ax.set_zlim(df[first_group_params[2]].min(), df[first_group_params[2]].max())
 
-        ax.legend()
+        self.ax.legend()
         self.canvas.draw()
         self.canvas.draw()
 
@@ -316,7 +328,7 @@ class MainWindow(QMainWindow):
 
                 if 'axis' in self.config[main_point]:
                     for axis_group in self.config[main_point]['axis']:
-                        print(axis_group)
+           
                         for axis, axis_info in axis_group.items():
                             # Extract unit or units
                             unit = axis_info.get('unit', '')
