@@ -1,11 +1,33 @@
 GPS:
+  dim: '3D'
+  axis:
   - axis1:
       unit:
         - '°'
         - '°'
         - 'm'
-      dim: '3D'
+      
       parameters:
       - lon
       - lat
       - altitude
+SNR:
+  axis:
+  - axis1:
+      unit: 'snr'
+      parameters:
+        - snr_1
+        - snr_2
+        - snr_3
+        - snr_4
+
+SNR2:
+  type: 'print'
+  axis:
+    - axis1:
+        unit: 'snr'
+        parameters:
+          - snr_1
+          - snr_2
+          - snr_3
+          - snr_4

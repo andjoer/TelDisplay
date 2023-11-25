@@ -4,8 +4,12 @@ import time
 from gps import nmea_to_dict
 # Load YAML configuration
 
-config_file = 'gps_parser_config.yml'
-data_file = 'gps.dat'
+import time
+
+start = time.time()
+
+config_file = 'parser_config.yml'
+data_file = 'data.txt'
 
 
 with open(config_file, 'r') as file:
@@ -61,7 +65,7 @@ def process_line(line):
         try:
             data = {}
             parsed = nmea_to_dict(line)
-   
+            data['Time'] = time.time() - start
             for column_name in column_names:
           
                 if column_name in parsed:
@@ -69,7 +73,8 @@ def process_line(line):
                         data[column_name] = parsed[column_name]
       
             return data
-        except: 
+        except Exception as e:
+            print(f'Error parsing line: {e}')
             return None
     else: 
         return process_nmea(line)
@@ -101,11 +106,10 @@ with open('output.csv', 'w', newline='') as outfile:
     # Continuously read from the input file
     with open(data_file, 'r') as infile:
         for line in infile:
-            #time.sleep(0.2)  # Simulated sampling rate
+            #time.sleep(0.01)  # Simulated sampling rate
             if line.startswith('$'):
                 row_data = process_line(line)
                 if row_data:
-                    print(row_data)
                     writer.writerow(row_data)
                 
                     outfile.flush()

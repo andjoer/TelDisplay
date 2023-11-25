@@ -4,3 +4,7 @@ GPGGA:
     - lon
     - lat
     - altitude
+    - snr_1
+    - snr_2
+    - snr_3
+    - snr_4
