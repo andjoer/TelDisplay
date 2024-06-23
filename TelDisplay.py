@@ -23,9 +23,9 @@ from matplotlib.ticker import MaxNLocator
 from pynng import Sub0
 import pynng
 from pathlib import Path
+import zmq
 
 class FileMonitor(QThread):
-    # Define the signal to emit data, specifying the data type as pandas DataFrame
     data_signal = pyqtSignal(pd.DataFrame)
 
     def __init__(self, filename, parser):
@@ -34,84 +34,47 @@ class FileMonitor(QThread):
         self.running = True
         self.parser = parser
         self.column_names = parser.column_names
-        self.buffer = 2
-        self.first_line = 0 
         self.address = 'tcp://127.0.0.1:12345'
+        self.context = zmq.Context()
+        self.subscriber = self.context.socket(zmq.SUB)
+        self.subscriber.connect(self.address)
+        self.subscriber.setsockopt_string(zmq.SUBSCRIBE, '')
 
     def run(self):
-        # Initialize the DataFrame with predefined columns.
         df = pd.DataFrame(columns=self.column_names)
         start = time.time()
-        try:
-         
-            print('iteration took', time.time()-start)
-            start = time.time()
-            check_file = Path(self.filename)
-            if check_file.is_file():
-                with open(self.filename, 'r') as file:
-                    # Read and process all existing lines first
-                    
-                    for line in file:  # Start counting from 1
-                        row_data = self.parser.process_line(line.strip())
-                        if row_data:
-                            print('row_data')
-                            print(row_data)
-                            df = pd.concat([df, pd.DataFrame([row_data], columns=self.column_names)])
-
-                # Emit initial data frame if not empty
-
-                self.data_signal.emit(df)
-
-            len_df_old = len(df)
-            send_time = time.time()
-            with Sub0(dial=self.address, recv_timeout=1000) as sub, open(self.filename, 'a') as file:
-                sub.subscribe(b'')  # Subscribe to all topics
-                while self.running:
-                    try:
-                        msg = sub.recv().decode()
-                        print('received:', msg)
-                        file.write(msg + '\n')
-                        row_data = self.parser.process_line(msg.strip())
-                        if row_data:
-                            print('row_data')
-                            print(row_data)
-                            df = pd.concat([df, pd.DataFrame([row_data], columns=self.column_names)])
-                        #self.data_signal.emit(msg.decode('utf-8'))
-                    except pynng.Timeout:
-                        continue
-
-                    if time.time()-send_time > 0.1:
-                        self.data_signal.emit(df)
-                        send_time = time.time()
-                        len_df_old = len(df)
-
-                    
-                   
-
-                ''' # After processing all lines, move to the end of the file
-                file.seek(0, 2)  # Move to the end of the file
-                len_start = len(df)
-                while self.running:
-                    line = file.readline()
-                    print('line')
-                    print(line)
-                    if not line:
-                        print('start sleep')
-                        time.sleep(0.01)  # Sleep briefly to avoid busy waiting
-                        print('stop_sleep')
-                        continue
+        check_file = Path(self.filename)
+        if check_file.is_file():
+            with open(self.filename, 'r') as file:
+                for line in file:
                     row_data = self.parser.process_line(line.strip())
                     if row_data:
                         df = pd.concat([df, pd.DataFrame([row_data], columns=self.column_names)])
-                    if len(df) - len_start > self.buffer:
-                        self.data_signal.emit(df)
-                        len_start = len(df)'''
+            self.data_signal.emit(df)
 
-        except Exception as e:
-            print("Error reading from file:", e)
+        len_df_old = len(df)
+        send_time = time.time()
+        with open(self.filename, 'a') as file:
+            while self.running:
+                try:
+                    msg = self.subscriber.recv_string(zmq.NOBLOCK)  # Non-blocking receive
+                    print('received:', msg)
+                    file.write(msg + '\n')
+                    row_data = self.parser.process_line(msg.strip())
+                    if row_data:
+                        df = pd.concat([df, pd.DataFrame([row_data], columns=self.column_names)])
+                except zmq.Again:
+                    continue  # No message received, continue and try again
+
+                if time.time() - send_time > 0.1:
+                    self.data_signal.emit(df)
+                    send_time = time.time()
+                    len_df_old = len(df)
 
     def stop(self):
         self.running = False
+        self.subscriber.close()
+        self.context.term()
 
 
 
