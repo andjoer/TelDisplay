@@ -35,9 +35,11 @@ class NMEAParser:
             try:
                 data = {'Time': time.time() - self.start_time}
                 parsed = nmea_to_dict(line)
+
                 for column_name in self.column_names:
+                    print(column_name)
                     if column_name in parsed and parsed[column_name]:
-                        data[column_name] = parsed[column_name]
+                        data[column_name] = float(parsed[column_name])
                 return data
             except Exception as e:
                 print(f'Error parsing line: {e}')

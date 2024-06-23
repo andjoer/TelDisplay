@@ -8,6 +8,6 @@ def send_file_lines(filename, delay):
             time.sleep(delay)
 
 if __name__ == "__main__":
-    filename = "data.txt"  # Update the path to your text file
-    delay = 0.004  # Delay in seconds between sending lines
+    filename = "gps.dat"  # Update the path to your text file
+    delay = 0.0004  # Delay in seconds between sending lines
     send_file_lines(filename, delay)

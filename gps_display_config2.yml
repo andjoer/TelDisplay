@@ -1,0 +1,32 @@
+GPS:
+  dim: '2D'
+  parametrized: True
+  axis:
+  - axis1:
+      unit:
+        - 'm'
+        - 'm'
+      parameters:
+      - lon
+      - lat
+
+SNR:
+  axis:
+  - axis1:
+      unit: 'snr'
+      parameters:
+        - snr_1
+        - snr_2
+        - snr_3
+        - snr_4
+
+SNR2:
+  type: 'print'
+  axis:
+    - axis1:
+        unit: 'snr'
+        parameters:
+          - snr_1
+          - snr_2
+          - snr_3
+          - snr_4

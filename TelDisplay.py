@@ -116,7 +116,7 @@ class FileMonitor(QThread):
 
 
 class PrintWindow(QWidget):
-    def __init__(self, axis_data, df, main_window):
+    def __init__(self, axis_data, main_window, df):
         super().__init__()
         self.main_window = main_window
         self.main_window.start_time_changed.connect(self.update_start_time)
@@ -147,7 +147,7 @@ class PrintWindow(QWidget):
         self.labels = {}  
 
         self.initUI()
-
+        self.handleNewData(df)
     def initUI(self):
         self.layout = QVBoxLayout()
         color_index = 0
@@ -155,7 +155,7 @@ class PrintWindow(QWidget):
         for data_column, unit in zip(self.data_columns, self.units):
             label = QLabel(f"{data_column} ({unit}): ")
             color = self.colors[color_index % len(self.colors)]
-            label.setStyleSheet(f"background-color: {color};")  # Set background color
+            label.setStyleSheet(f"background-color: {color}; color: black;")  # Set background color
             self.labels[data_column] = label
             self.layout.addWidget(label)
             color_index += 1
@@ -189,18 +189,20 @@ class PrintWindow(QWidget):
                     max_value = max_data[data_column]
                     unit = self.units[self.data_columns.index(data_column)]
                     label.setText(f"{data_column} ({unit}): Latest: {value}, Min: {min_value}, Max: {max_value}")
+
         except Exception as e:
             print(f'Error updating data: {e}')
 
 
 class PlotWindow(QWidget):
-    def __init__(self, axis_data, main_window, current_df, dim='2D'):
+    def __init__(self, axis_data, main_window, current_df, dim='2D', parametrized=False):
         super().__init__()
         self.main_window = main_window
         self.main_window.start_time_changed.connect(self.update_start_time)
         self.axis_data = axis_data
         self.start_time = 0
         self.dim = dim
+        self.parametrized = parametrized
         self.labels = {}  
         self.df = current_df  # Initialize with the provided DataFrame
         self.initUI(current_df)
@@ -213,10 +215,11 @@ class PlotWindow(QWidget):
         self.units = []
 
         for (data_column, units) in self.axis_data:
+
             if not isinstance(units, list):
                 units = [units] * len(data_column)
-            else:
-                units = self.units
+            '''else:
+                self.units = units'''
             self.data_columns.extend(data_column)
             self.units.extend(units) 
 
@@ -227,13 +230,18 @@ class PlotWindow(QWidget):
 
         self.line_objects = {}
         colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
+        self.colors = colors
         color_index = 0
 
         for i, (params, units) in enumerate(self.axis_data):
             ax = self.ax if self.dim == '3D' else (self.ax if i == 0 else self.ax.twinx())
-            for param in params:
+            for idx, param in enumerate(params):
                 color = colors[color_index % len(colors)]
-                line, = ax.plot([], [], label=f"{param} ({units})", color=color)
+                if isinstance(units,list):
+                    unit = units[idx]
+                else: 
+                    unit = units
+                line, = ax.plot([], [], label=f"{param} ({unit})", color=color)
                 self.line_objects[param] = line
                 label = QLabel(f"{param} ({units}): ")
                 self.labels[param] = label
@@ -245,7 +253,10 @@ class PlotWindow(QWidget):
             ax.legend()
 
         self.setLayout(self.layout)
-        self.handleNewData(self.df)
+        try: 
+            self.handleNewData(self.df)
+        except Exception as e:
+            print(f'Error updating data: {e}')
 
     def update_start_time(self, start_time):
         self.start_time = start_time
@@ -289,32 +300,35 @@ class PlotWindow(QWidget):
         self.canvas.draw()
 
     def updatePlot2D(self, df):
-        # Keep track of axes that need to be updated
+        # Initialize the set of axes to update at the start of the method
         axes_to_update = set()
 
-        # Update data for each line and record which axes they belong to
-        for param, line in self.line_objects.items():
-            if param in df.columns:
-                subset = df.dropna(subset=['Time', param])
-                line.set_data(subset['Time'], subset[param])
-                axes_to_update.add(line.axes)  # Collect the axes to update
-
+        if not self.parametrized:
+            # Regular plotting against time
+            for param, line in self.line_objects.items():
+                if param in df.columns:
+                    subset = df.dropna(subset=['Time', param])
+                    line.set_data(subset['Time'], subset[param])
+                    axes_to_update.add(line.axes)
+        else:
+            # Parametric plotting, assumes two parameters in each group
+            for i, (params, units) in enumerate(self.axis_data):
+                if len(params) >= 2:
+                    subset = df.dropna(subset=params[:2])
+                    line = self.line_objects[params[0]]  # Assuming line_objects has been correctly initialized for parametric data
+                    line.set_data(subset[params[0]], subset[params[1]])
+                    axes_to_update.add(line.axes)
+                    # Set axis labels
+                    line.axes.set_xlabel(f"{params[0]} ({units[0]})")
+                    line.axes.set_ylabel(f"{params[1]} ({units[1]})")
         # Recompute and rescale each axis that has been updated
         for ax in axes_to_update:
-            ax.relim()  # Recompute the data limits for the current axis
-            ax.autoscale_view()  # Adjust the view limits to the new data limits
+            ax.relim()
+            ax.autoscale_view()
 
-        self.canvas.draw()  # Redraw the plot with updated axes
+        self.canvas.draw()
 
-    def updatePlot2D_qcharts(self,df):
-        self.chart.removeAllSeries()
-        for data_column, unit in zip(self.data_columns, self.units):
-            series = QtChart.QLineSeries()
-            for i in range(len(df)):
-                series.append(df.iloc[i]['Time'], df.iloc[i][data_column])
-            series.setName(f"{data_column} ({unit})")
-            self.chart.addSeries(series)
-            self.chart.createDefaultAxes()
+
 
 
 class MainWindow(QMainWindow):
@@ -322,11 +336,11 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        self.conf_file = 'display_config.yml'
+        self.conf_file = 'gps_display_config.yml'#'gps_display_config2.yml'
         self.data_file = 'received.txt'
+        self.parser = NMEAParser('gps_parser_config.yml')#NMEAParser('gps_parser_config.yml')
 
-        
-        self.parser = NMEAParser('parser_config.yml')
+
         self.current_df = pd.DataFrame(columns=self.parser.column_names)
         self.file_monitor = FileMonitor(self.data_file, self.parser)
         self.file_monitor.data_signal.connect(self.handleNewData)
@@ -386,15 +400,18 @@ class MainWindow(QMainWindow):
                 axis_data = []
                 units = []
                 dim = '2D'  # Default value for dimension
+                parametrized = False # Default value for plot
 
                 window_type = self.config[main_point].get('type', 'plot')  # Extract window type
 
                 if 'axis' in self.config[main_point]:
+ 
                     for axis_group in self.config[main_point]['axis']:
            
                         for axis, axis_info in axis_group.items():
                             # Extract unit or units
                             unit = axis_info.get('unit', '')
+
                             if isinstance(unit, list):
                                 units.extend(unit)
                             else:
@@ -405,13 +422,15 @@ class MainWindow(QMainWindow):
                             # Extract dimension if present
                             if 'dim' in self.config[main_point]:
                                 dim = self.config[main_point]['dim']
+                            if 'parametrized' in self.config[main_point]:
+                                parametrized = self.config[main_point]['parametrized']
 
                         axis_data.append((params,unit))
 
                 if window_type == 'print':
                     window = PrintWindow(axis_data, self,self.current_df)  # Create a print window
                 else:
-                    window = PlotWindow(axis_data ,self, self.current_df, dim=dim)  # Create a plot window
+                    window = PlotWindow(axis_data ,self, self.current_df, dim=dim, parametrized=parametrized)  # Create a plot window
 
                 window.show()
 
